@@ -49,11 +49,34 @@ sub help {
 
 sub said {
     my ( $self, $args, $pri ) = @_;
-    my ( $who, $nick, $channel, $body, $address ) = @$args{ qw( who nick channel body address ) };
+    my ( $who, $nick, $channel, $body, $address ) = 
+        @$args{ qw( who nick channel body address ) };
 
     return unless ( $pri == 2 ); 
 
-    if ( $body =~ /^.*retort (\w+) as (.*)$/ ) {
+    if ( $body =~ /^.*retort remove (\w+) as (.*)$/ ) {
+        for my $word (keys %awesomes){
+            if (lc($word) eq lc($1)){
+                my $i = 0;
+                for my $phrase (%awesomes{$word}){
+                    if(lc($phrase) eq lc($2)){
+                       delete ${%keys{$word}}->[$i++];
+                    }
+                }
+            }
+        }
+        return "$who, ok, deleted.";
+    }elsif ( $body =~ /^.*retort list/ ) {
+        my $message;
+        for my $word (keys %awesomes){
+            $message .= "$word: "; 
+            for my $phrase (%awesomes{$word}){
+                $message .= "\n\t$phrase";
+            }
+                $message .= "\n";
+        }
+        return $message;
+    }elsif ( $body =~ /^.*retort (\w+) as (.*)$/ ) {
         my ( $word, $content ) = ( $1, $2 );
         my ( $stem ) = Text::English::stem( $word );
         my $has = $store->get( $sns, $stem );
