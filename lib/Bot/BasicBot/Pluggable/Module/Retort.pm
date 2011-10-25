@@ -40,11 +40,31 @@ my %awesomes = (
 );
 
 foreach my $wurd ( keys %awesomes ) {
-    $store->set( $sns, $wurd, $awesomes{$wurd} ) if ( ! $store->get( $sns, $wurd ) );
+    $store->set( $sns, 'phrases', \%awesomes )
+        if ( ! $store->get( $sns, 'phrases' ) );
 }
 
 sub help {
     return 'retort [WORD] as [STATEMENT]' 
+}
+
+sub _get_phrases {
+    my ($self, $word) = @_;
+    if ($word){
+        my ( $stem ) = Text::English::stem(lc($word));
+        return $store->get( $sns, 'phrases' )->{$stem};
+    }else{
+        return $store->get( $sns, 'phrases' );
+    }
+}
+
+sub _set_phrases {
+    my ($self, $word, $phrases) = @_;
+    my ( $stem ) = Text::English::stem(lc($word));
+    my $all_phrases = $store->get( $sns, 'phrases' );
+    $all_phrases->{$stem} = $phrases;
+    $store->set( $sns, 'phrases', $all_phrases );
+    $store->save;
 }
 
 sub said {
@@ -54,43 +74,46 @@ sub said {
 
     return unless ( $pri == 2 ); 
 
-    if ( $body =~ /^.*retort remove (\w+) as (.*)$/ ) {
-        for my $word (keys %awesomes){
-            if (lc($word) eq lc($1)){
-                my $i = 0;
-                for my $phrase (%awesomes{$word}){
-                    if(lc($phrase) eq lc($2)){
-                       delete ${%keys{$word}}->[$i++];
-                    }
-                }
+    if ( $body =~ /^.*remove retort (\w+) as (.*)$/ ) {
+        my $i = my $found = 0;
+        my $has = $self->_get_phrases($1);
+        for my $phrase (@$has){
+            if(lc($phrase) eq lc($2)){
+                $found = 1;
+                splice(@$has, $i, 1);
             }
+            $i++;
         }
-        return "$who, ok, deleted.";
-    }elsif ( $body =~ /^.*retort list/ ) {
+        if($found){
+            $self->_set_phrases( $1, $has );
+            return "$who, ok, removed.";
+        }
+        return "$who, not found!";
+    } elsif ( $body =~ /.*list retort\s*(\w+)?/i ) {
         my $message;
-        for my $word (keys %awesomes){
-            $message .= "$word: "; 
-            for my $phrase (%awesomes{$word}){
-                $message .= "\n\t$phrase";
+        my $phrases = $self->_get_phrases;
+        if($1){
+            if (my $has = $self->_get_phrases($1)){
+                $message .= "$1: "; 
+                $message .= "\n\t$_" for (@$has);
             }
-                $message .= "\n";
+        }else{
+            $message .=  "$_ " for (keys $phrases);
         }
-        return $message;
+        return $message ||= "No retorts found for $1.";
     }elsif ( $body =~ /^.*retort (\w+) as (.*)$/ ) {
         my ( $word, $content ) = ( $1, $2 );
-        my ( $stem ) = Text::English::stem( $word );
-        my $has = $store->get( $sns, $stem );
+        my $has = $self->_get_phrases($word);
         push( @{ $has ||= [] }, $content );
-        $store->set( $sns, $stem, $has );
-        $store->save();
+        $self->_set_phrases($word, $has);
         
         $self->reply( $args, "$who, got it." ); 
         return;
     }
 
-    foreach my $stem ( Text::English::stem( map{ lc } split( /\s+/, $body ) ) ) {
-        if ( my $has = $store->get( $sns, $stem ) ) {
-            $self->reply( $args, $has->[ int( rand( @$has ) ) ] ); 
+    foreach my $stem (Text::English::stem(map{ lc } split( /\s+/, $body))){
+        if ( my $has = $self->_get_phrases($stem) ) {
+            $self->reply( $args, $has->[ int( rand( @$has ) ) ] );
             return;
         }
     }
