@@ -39,10 +39,8 @@ my %awesomes = (
     ],
 );
 
-foreach my $wurd ( keys %awesomes ) {
-    $store->set( $sns, 'phrases', \%awesomes )
-        if ( ! $store->get( $sns, 'phrases' ) );
-}
+$store->set( $sns, 'phrases', \%awesomes )
+    if ( ! $store->get( $sns, 'phrases' ) );
 
 sub help {
     return 'retort [WORD] as [STATEMENT]' 
